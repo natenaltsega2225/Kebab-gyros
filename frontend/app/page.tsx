@@ -1,69 +1,25 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import Image from 'next/image';
+import { getPublicData } from '../lib/api/public';
+import Menu from '../components/Menu';
+import styles from './page.module.css';
 
-export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>
-            To get started, edit the{" "}
-            <code className={styles.code}>page.tsx</code> file.
-          </h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+const fallbackOrderUrl = 'https://online.skytab.com/s/kebabgyronashville?referralSource=skytabwebsite&referralGuid=755bb0ba-2f51-48f0-b131-d9ba3fb72b1f&stw_domain=kebabgyronashville.com';
+const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+function displayTime(value: string | null) { if (!value) return ''; const [h,m] = value.split(':').map(Number); return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; }
+export default async function Home() {
+  const { categories, items, restaurant, hours, error } = await getPublicData();
+  const orderUrl = restaurant?.orderOnlineUrl || fallbackOrderUrl;
+  const address = restaurant ? `${restaurant.addressLine1}, ${restaurant.city}, ${restaurant.state} ${restaurant.zipCode}` : '389 Murfreesboro Pike, Nashville, TN 37210';
+  const directions = restaurant?.googleMapsUrl || `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+  const order = (label: string) => <a className={styles.order} href={orderUrl} target="_blank" rel="noopener noreferrer">{label}</a>;
+  const photos = ['/food/combo-plate.jpg', '/food/gyro-sandwich.jpg', '/food/baklava.jpg'];
+  const favorites = items.filter((item) => Boolean(item.isPopular)).slice(0,3);
+  return <><header className={styles.header}><div className={styles.wrap}><a href="#top" className={styles.brand}>✦ <span>Kebab Gyros<small>Greek & Italian Eatery</small></span></a><nav aria-label="Main navigation"><a href="#featured">Favorites</a><a href="#menu">Menu</a><a href="#about">About</a><a href="#visit">Visit</a>{order('Order Now')}</nav><a className={styles.mobileNav} href="#menu">Browse menu</a></div></header>
+  <main id="top"><section className={styles.hero}><Image src="/food/mediterranean-hero.jpg" alt="Fresh Mediterranean plate with pita and vegetables" fill priority sizes="100vw" className={styles.heroPhoto}/><div className={styles.heroOverlay}/><div className={styles.heroText}><p className={styles.eyebrow}>Fresh Mediterranean Flavor in Nashville</p><h1>Authentic Gyros, Kebabs & Italian Favorites</h1><p>Freshly prepared plates, sandwiches, pasta, salads, and more—ready for dine-in, takeout, or convenient online ordering.</p><div className={styles.actions}>{order('Order Now')}<a className={styles.outline} href="#menu">Explore the Menu</a></div><p className={styles.address}>⌖ {address}</p></div></section>
+  <section id="featured" className={styles.section}><div className={styles.wrap}><p className={styles.eyebrow}>Customer favorites</p><h2>Made fresh. Served generous.</h2><p className={styles.lead}>Comforting Mediterranean classics prepared for a quick lunch, an easy dinner, or takeout on the way home.</p><div className={styles.cards}>{favorites.map((item,index) => <article className={styles.card} key={item.id}><Image src={item.imageUrl ? item.imageUrl.startsWith('http') ? item.imageUrl : `${process.env.API_BASE_URL || 'http://localhost:4000'}${item.imageUrl}` : photos[index]} alt={item.name} width={600} height={440} unoptimized={Boolean(item.imageUrl)}/><div><h3>{item.name}</h3><strong>${Number(item.price).toFixed(2)}</strong></div></article>)}</div>{!favorites.length && <p className={styles.notice}>Favorites will appear here when the menu is available.</p>}<div className={styles.center}>{order('Start Your Order')}</div></div></section>
+  <section id="menu" className={`${styles.section} ${styles.warm}`}><div className={styles.wrap}><p className={styles.eyebrow}>Our menu</p><h2>Find your favorite</h2>{error && <p className={styles.notice} role="status">The live menu is temporarily unavailable. Please use online ordering for current items and prices.</p>}<Menu categories={categories} items={items}/><p className={styles.disclaimer}>Menu items and prices are subject to change.</p><div className={styles.center}>{order('Order from the Full Menu')}</div></div></section>
+  <section id="about" className={styles.section}><div className={styles.wrap}><p className={styles.eyebrow}>Greek & Italian Eatery</p><h2>Fresh food for your Nashville day.</h2><p className={styles.lead}>Stop in for generous Mediterranean plates, sandwiches, and Italian favorites. Enjoy a quick meal or order ahead for pickup.</p><div className={styles.gallery}>{photos.map((photo,i) => <Image key={photo} src={photo} alt={['Combo plate','Gyro sandwich','Baklava'][i]} width={480} height={340}/>)}</div></div></section>
+  <section id="visit" className={`${styles.section} ${styles.visit}`}><div className={styles.wrap}><p className={styles.eyebrow}>Visit us</p><h2>Your neighborhood stop for fresh Mediterranean flavor</h2><div className={styles.visitCard}><div><h3>Find us</h3><p>{address}</p><div className={styles.actions}><a className={styles.outline} href={directions} target="_blank" rel="noopener noreferrer">Get Directions</a>{order('Order Online')}</div><a className={styles.map} href={directions} target="_blank" rel="noopener noreferrer">⌖ Kebab Gyros, Nashville ↗</a></div><div><h3>Business Hours</h3><dl>{days.map((day,i) => { const entry = hours.find((h) => Number(h.dayOfWeek) === i); return <div className={styles.hour} key={day}><dt>{day}</dt><dd>{entry ? entry.isClosed ? 'Closed' : `${displayTime(entry.openTime)}–${displayTime(entry.closeTime)}` : 'Hours unavailable'}</dd></div>; })}</dl></div></div></div></section>
+  <section className={`${styles.section} ${styles.center}`}><h2>Fresh food is just a few clicks away.</h2><p>Browse the full online menu and place your order for convenient pickup.</p>{order('Start Your Order')}</section></main>
+  <footer className={styles.footer}><div className={styles.wrap}><div className={styles.footerGrid}><div><h2>Kebab Gyros</h2><p>Greek & Italian Eatery</p><p>Greek and Italian favorites served on Murfreesboro Pike in Nashville.</p></div><div><h3>Quick Links</h3><a href="#top">Home</a><a href="#featured">Favorites</a><a href="#menu">Menu</a><a href="#visit">Visit Us</a></div><div><h3>Visit</h3><p>{address}</p><a href={`mailto:${restaurant?.email || 'kg_negash@yahoo.com'}`}>{restaurant?.email || 'kg_negash@yahoo.com'}</a></div><div><h3>Ordering</h3>{order('Order Online')}</div></div><p className={styles.copyright}>© {new Date().getFullYear()} Kebab Gyros. Online ordering powered by SkyTab.</p></div></footer><div className={styles.sticky}>{order('Order Now')}</div></>;
 }
