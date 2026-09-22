@@ -59,5 +59,5 @@ This project is currently under development.
 
 ## Contributors
 
-* Frontend development and project coordination: Natenal Tsega
-* Backend development: ADACloudTech development team
+* Frontend development and project coordination: Natnael  Tsega
+* Backend development: Nigusea Dessie
