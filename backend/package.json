@@ -1,17 +1,23 @@
 {
-  "name": "backend",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "kebab-gyros-enterprise-backend",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Enterprise Next.js API backend for Kebab Gyros Nashville",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "next dev -p 4000",
+    "build": "next build",
+    "start": "next start -p 4000",
+    "admin:create": "node scripts/create-admin.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
+    "bcryptjs": "^3.0.2",
     "dotenv": "^18.0.2",
-    "mysql2": "^3.24.4"
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.24.4",
+    "next": "^15.5.4",
+    "nodemailer": "^7.0.6",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zod": "^4.1.11"
   }
 }

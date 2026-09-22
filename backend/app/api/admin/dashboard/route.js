@@ -1,0 +1,4 @@
+import { db } from '../../../../lib/db';
+import { requireAuth } from '../../../../lib/auth';
+import { ok, fail } from '../../../../lib/http';
+export async function GET(request){ const auth=await requireAuth(request); if(!auth.ok)return fail(auth.error,auth.status); const [[items],[cats],[users],[popular],[active]] = await Promise.all([db.query('SELECT COUNT(*) count FROM menu_items'),db.query('SELECT COUNT(*) count FROM menu_categories'),db.query('SELECT COUNT(*) count FROM admin_users WHERE is_active=1'),db.query('SELECT COUNT(*) count FROM menu_items WHERE is_popular=1 AND is_active=1'),db.query('SELECT COUNT(*) count FROM menu_items WHERE is_active=1')]); return ok({ totalMenuItems:items[0].count, activeMenuItems:active[0].count, popularItems:popular[0].count, categories:cats[0].count, activeAdminUsers:users[0].count }); }

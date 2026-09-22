@@ -1,0 +1,6 @@
+import { db } from '../../../../../lib/db';
+import { requireAuth } from '../../../../../lib/auth';
+import { ok, fail, parseId } from '../../../../../lib/http';
+import { hoursUpdateSchema } from '../../../../../lib/validation';
+import { audit } from '../../../../../lib/audit';
+export async function PATCH(request,ctx){const auth=await requireAuth(request);if(!auth.ok)return fail(auth.error,auth.status);const pms=await ctx.params;const id=parseId(pms.id);if(!id)return fail('Invalid hours id',400);const p=hoursUpdateSchema.safeParse(await request.json());if(!p.success)return fail('Invalid hours data',422,p.error.flatten());const map={dayOfWeek:'day_of_week',isClosed:'is_closed',openTime:'open_time',closeTime:'close_time',note:'note'},sets=[],vals=[];for(const[k,c]of Object.entries(map))if(p.data[k]!==undefined){sets.push(`${c}=?`);vals.push(k==='isClosed'?(p.data[k]?1:0):p.data[k])}if(!sets.length)return fail('No fields supplied',400);const[r]=await db.query(`UPDATE business_hours SET ${sets.join(',')} WHERE id=?`,[...vals,id]);if(!r.affectedRows)return fail('Hours row not found',404);await audit(request,auth.user.id,'HOURS_UPDATED','business_hours',id,p.data);return ok({id,updated:true})}

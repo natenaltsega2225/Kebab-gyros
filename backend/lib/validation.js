@@ -1,0 +1,11 @@
+import { z } from 'zod';
+const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+export const categoryCreateSchema = z.object({ name:z.string().trim().min(1).max(80), slug:z.string().trim().min(1).max(80).regex(/^[a-z0-9-]+$/), sortOrder:z.coerce.number().int().min(0).default(0), isActive:z.boolean().default(true) });
+export const categoryUpdateSchema = categoryCreateSchema.partial();
+export const menuItemCreateSchema = z.object({ categoryId:z.coerce.number().int().positive(), name:z.string().trim().min(1).max(160), description:z.string().trim().max(1000).nullable().optional(), price:z.coerce.number().min(0).max(9999.99), imageUrl:z.string().trim().max(1000).nullable().optional(), isPopular:z.boolean().default(false), isActive:z.boolean().default(true), sortOrder:z.coerce.number().int().min(0).default(0) });
+export const menuItemUpdateSchema = menuItemCreateSchema.partial();
+export const hoursSchema = z.object({ dayOfWeek:z.coerce.number().int().min(0).max(6), isClosed:z.boolean().default(false), openTime:time.nullable().optional(), closeTime:time.nullable().optional(), note:z.string().trim().max(255).nullable().optional() });
+export const hoursUpdateSchema = hoursSchema.partial();
+export const restaurantSchema = z.object({ restaurantName:z.string().trim().min(1).max(160), addressLine1:z.string().trim().min(1).max(190), addressLine2:z.string().trim().max(190).nullable().optional(), city:z.string().trim().min(1).max(100), state:z.string().trim().min(1).max(100), zipCode:z.string().trim().min(1).max(20), phone:z.string().trim().min(1).max(40), email:z.string().email().max(190), googleMapsUrl:z.string().url().max(1000).nullable().optional(), orderOnlineUrl:z.string().url().max(1000).nullable().optional(), logoUrl:z.string().max(1000).nullable().optional() });
+export const userCreateSchema = z.object({ username:z.string().trim().min(3).max(60).regex(/^[A-Za-z0-9._-]+$/), email:z.string().trim().email().max(190), fullName:z.string().trim().min(1).max(120), role:z.enum(['admin','manager']).default('manager') });
+export const userUpdateSchema = z.object({ email:z.string().trim().email().max(190).optional(), fullName:z.string().trim().min(1).max(120).optional(), role:z.enum(['admin','manager']).optional(), isActive:z.boolean().optional() });
