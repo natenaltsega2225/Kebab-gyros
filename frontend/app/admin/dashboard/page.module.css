@@ -1,0 +1,13 @@
+.page{min-height:100vh;padding:2rem;background:var(--warm)}
+.dashboard{width:min(100%,70rem);margin:0 auto;padding:2.25rem;background:#fff;border:1px solid #dce2d8;border-radius:1rem;box-shadow:0 1rem 3rem #21343a1a}
+.header{display:flex;align-items:flex-start;justify-content:space-between;gap:1.5rem;margin-bottom:2rem}
+.eyebrow{margin:.2rem 0 .5rem;color:var(--olive);font-size:.8rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.header h1{margin-bottom:.75rem;color:var(--blue)}
+.header button{padding:.7rem 1rem;border:0;border-radius:.4rem;background:var(--blue);color:#fff;cursor:pointer;font:inherit;font-weight:700}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:1rem;margin:0}
+.metric{padding:1.25rem;border-radius:.65rem;background:#f3f6ef}
+.metric dt{color:#4b5a5d;font-weight:700}
+.metric dd{margin:.5rem 0 0;color:var(--blue);font-size:2rem;font-weight:700}
+.outage{width:min(100%,40rem);margin:4rem auto;padding:1rem;background:#fff0ed;color:#8d2b1f;border-radius:.4rem}
+.categoriesLink{display:inline-block;margin-top:1.5rem;color:var(--blue);font-weight:700;text-decoration:underline}
+@media (max-width:40rem){.page{padding:1rem}.dashboard{padding:1.5rem}.header{flex-direction:column}.header button{width:100%}}
