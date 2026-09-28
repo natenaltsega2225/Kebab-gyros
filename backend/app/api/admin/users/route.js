@@ -1,66 +1,148 @@
 import { db } from '../../../../lib/db';
 import { requireAdmin } from '../../../../lib/auth';
-import { ok, fail, parseId } from '../../../../lib/http';
-import { userUpdateSchema } from '../../../../lib/validation';
+import { ok, fail } from '../../../../lib/http';
+import { userCreateSchema } from '../../../../lib/validation';
+import {
+  generateTemporaryPassword,
+  hashPassword,
+} from '../../../../lib/security';
+import { sendTemporaryCredentials } from '../../../../lib/email';
 import { audit } from '../../../../lib/audit';
 
-async function idOf(ctx) {
-  const p = await ctx.params;
-  return parseId(p.id);
-}
-
-export async function GET(request, ctx) {
+export async function GET(request) {
   const auth = await requireAdmin(request);
 
   if (!auth.ok) {
     return fail(auth.error, auth.status);
   }
 
-  const id = await idOf(ctx);
+  try {
+    const { searchParams } = new URL(request.url);
 
-  if (!id) {
-    return fail('Invalid user id', 400);
+    const search = searchParams.get('search')?.trim() || '';
+    const role = searchParams.get('role')?.trim() || '';
+    const status = searchParams.get('status')?.trim() || '';
+
+    const page = Math.max(
+      Number.parseInt(searchParams.get('page') || '1', 10),
+      1
+    );
+
+    const pageSize = Math.min(
+      Math.max(
+        Number.parseInt(searchParams.get('pageSize') || '25', 10),
+        1
+      ),
+      100
+    );
+
+    const where = [];
+    const values = [];
+
+    if (search) {
+      where.push(`
+        (
+          username LIKE ?
+          OR email LIKE ?
+          OR full_name LIKE ?
+        )
+      `);
+
+      const term = `%${search}%`;
+
+      values.push(term, term, term);
+    }
+
+    if (role === 'admin' || role === 'manager') {
+      where.push('role = ?');
+      values.push(role);
+    }
+
+    if (status === 'active') {
+      where.push('is_active = 1');
+    }
+
+    if (status === 'inactive') {
+      where.push('is_active = 0');
+    }
+
+    const whereSql = where.length
+      ? `WHERE ${where.join(' AND ')}`
+      : '';
+
+    const offset = (page - 1) * pageSize;
+
+    const [countRows] = await db.query(
+      `
+        SELECT COUNT(*) AS total
+        FROM admin_users
+        ${whereSql}
+      `,
+      values
+    );
+
+    const [rows] = await db.query(
+      `
+        SELECT
+          id,
+          username,
+          email,
+          full_name AS fullName,
+          role,
+          must_change_password AS mustChangePassword,
+          is_active AS isActive,
+          failed_login_count AS failedLoginCount,
+          locked_until AS lockedUntil,
+          last_login_at AS lastLoginAt,
+          password_changed_at AS passwordChangedAt,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM admin_users
+        ${whereSql}
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?
+        OFFSET ?
+      `,
+      [...values, pageSize, offset]
+    );
+
+    const total = Number(countRows[0]?.total || 0);
+
+    return ok({
+      users: rows,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+
+    return fail(
+      'Unable to load admin users',
+      500
+    );
   }
-
-  const [rows] = await db.query(
-    `
-      SELECT
-        id,
-        username,
-        email,
-        full_name AS fullName,
-        role,
-        must_change_password AS mustChangePassword,
-        is_active AS isActive,
-        last_login_at AS lastLoginAt,
-        created_at AS createdAt
-      FROM admin_users
-      WHERE id = ?
-    `,
-    [id]
-  );
-
-  return rows[0]
-    ? ok(rows[0])
-    : fail('User not found', 404);
 }
 
-export async function PATCH(request, ctx) {
+export async function POST(request) {
   const auth = await requireAdmin(request);
 
   if (!auth.ok) {
     return fail(auth.error, auth.status);
   }
 
-  const id = await idOf(ctx);
+  let body;
 
-  if (!id) {
-    return fail('Invalid user id', 400);
+  try {
+    body = await request.json();
+  } catch {
+    return fail('Invalid JSON body', 400);
   }
 
-  const parsed = userUpdateSchema.safeParse(
-    await request.json()
-  );
+  const parsed = userCreateSchema.safeParse(body);
 
   if (!parsed.success) {
     return fail(
@@ -70,77 +152,174 @@ export async function PATCH(request, ctx) {
     );
   }
 
-  const map = {
-    email: 'email',
-    fullName: 'full_name',
-    role: 'role',
-    isActive: 'is_active',
-  };
+  const {
+    username,
+    email,
+    fullName,
+    role,
+  } = parsed.data;
 
-  const sets = [];
-  const vals = [];
+  const normalizedUsername = username.trim();
+  const normalizedEmail = email
+    .trim()
+    .toLowerCase();
 
-  for (const [key, column] of Object.entries(map)) {
-    if (parsed.data[key] !== undefined) {
-      sets.push(`${column}=?`);
+  const temporaryPassword =
+    generateTemporaryPassword();
 
-      vals.push(
-        key === 'isActive'
-          ? parsed.data[key]
-            ? 1
-            : 0
-          : parsed.data[key]
-      );
-    }
-  }
+  const passwordHash = await hashPassword(
+    temporaryPassword
+  );
 
-  if (!sets.length) {
-    return fail('No fields supplied', 400);
-  }
+  const connection = await db.getConnection();
 
   try {
-    const [result] = await db.query(
-      `
-        UPDATE admin_users
-        SET ${sets.join(',')}
-        WHERE id = ?
-      `,
-      [...vals, id]
-    );
+    await connection.beginTransaction();
 
-    if (!result.affectedRows) {
-      return fail('User not found', 404);
+    const [existingRows] =
+      await connection.query(
+        `
+          SELECT
+            id,
+            username,
+            email
+          FROM admin_users
+          WHERE username = ?
+             OR email = ?
+          LIMIT 1
+        `,
+        [
+          normalizedUsername,
+          normalizedEmail,
+        ]
+      );
+
+    if (existingRows.length) {
+      await connection.rollback();
+
+      const existing = existingRows[0];
+
+      if (
+        existing.username ===
+        normalizedUsername
+      ) {
+        return fail(
+          'Username already exists',
+          409
+        );
+      }
+
+      return fail(
+        'Email already exists',
+        409
+      );
     }
 
-    if (parsed.data.isActive === false) {
-      await db.query(
+    const [result] =
+      await connection.query(
         `
-          UPDATE admin_sessions
-          SET revoked_at = UTC_TIMESTAMP()
-          WHERE user_id = ?
-            AND revoked_at IS NULL
+          INSERT INTO admin_users
+          (
+            username,
+            email,
+            full_name,
+            role,
+            password_hash,
+            must_change_password,
+            is_active,
+            failed_login_count,
+            locked_until,
+            password_changed_at
+          )
+          VALUES
+          (?, ?, ?, ?, ?, 1, 1, 0, NULL, NULL)
         `,
-        [id]
+        [
+          normalizedUsername,
+          normalizedEmail,
+          fullName,
+          role,
+          passwordHash,
+        ]
       );
+
+    const userId = result.insertId;
+
+    await connection.commit();
+
+    let credentialDelivery = 'sent';
+
+    try {
+      await sendTemporaryCredentials({
+        email: normalizedEmail,
+        username: normalizedUsername,
+        temporaryPassword,
+      });
+    } catch (emailError) {
+      console.error(
+        'Temporary credential email failed:',
+        emailError
+      );
+
+      credentialDelivery = 'failed';
     }
 
     await audit(
       request,
       auth.user.id,
-      'USER_UPDATED',
+      'USER_CREATED',
       'admin_user',
-      id,
-      parsed.data
+      userId,
+      {
+        username: normalizedUsername,
+        email: normalizedEmail,
+        fullName,
+        role,
+        credentialDelivery,
+      }
     );
 
-    return ok({
-      id,
-      updated: true,
-    });
+    return ok(
+      {
+        id: userId,
+        username: normalizedUsername,
+        email: normalizedEmail,
+        fullName,
+        role,
+        isActive: true,
+        mustChangePassword: true,
+        credentialDelivery,
+
+        ...(credentialDelivery === 'failed' &&
+        process.env.NODE_ENV !== 'production'
+          ? {
+              temporaryPassword,
+            }
+          : {}),
+      },
+      201
+    );
   } catch (error) {
+    try {
+      await connection.rollback();
+    } catch {
+      // Ignore rollback failure.
+    }
+
     console.error(error);
 
     if (error?.code === 'ER_DUP_ENTRY') {
+      if (
+        String(error.message).includes(
+          'uq_admin_username'
+        )
+      ) {
+        return fail(
+          'Username already exists',
+          409
+        );
+      }
+
       return fail(
         'Email already exists',
         409
@@ -148,54 +327,10 @@ export async function PATCH(request, ctx) {
     }
 
     return fail(
-      'Unable to update user',
+      'Unable to create admin user',
       500
     );
+  } finally {
+    connection.release();
   }
-}
-
-export async function DELETE(request, ctx) {
-  const auth = await requireAdmin(request);
-
-  if (!auth.ok) {
-    return fail(auth.error, auth.status);
-  }
-
-  const id = await idOf(ctx);
-
-  if (!id) {
-    return fail('Invalid user id', 400);
-  }
-
-  if (id === auth.user.id) {
-    return fail(
-      'You cannot delete your own account',
-      409
-    );
-  }
-
-  const [result] = await db.query(
-    `
-      DELETE FROM admin_users
-      WHERE id = ?
-    `,
-    [id]
-  );
-
-  if (!result.affectedRows) {
-    return fail('User not found', 404);
-  }
-
-  await audit(
-    request,
-    auth.user.id,
-    'USER_DELETED',
-    'admin_user',
-    id
-  );
-
-  return ok({
-    id,
-    deleted: true,
-  });
 }
