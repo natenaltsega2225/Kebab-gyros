@@ -24,8 +24,7 @@ function isAllowedApiBaseUrl(value: string | undefined) {
   try {
     const url = new URL(value);
     if (url.protocol === 'https:') return true;
-    return process.env.NODE_ENV === 'development'
-      && url.protocol === 'http:'
+    return url.protocol === 'http:'
       && (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
   } catch {
     return false;
@@ -83,7 +82,7 @@ export async function POST(request: Request) {
   response.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' && process.env.ADMIN_HTTP_PREVIEW !== '1',
     path: '/',
     maxAge: SESSION_MAX_AGE,
   });

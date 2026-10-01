@@ -1,11 +1,163 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- Local blob URLs cannot use Next image optimization. */
-import { FormEvent,useEffect,useState } from 'react';import Link from 'next/link';import { useRouter } from 'next/navigation';import styles from './page.module.css';
-type Category={id:number;name:string};type Item={id:number;categoryId:number;categoryName:string;name:string;description:string|null;price:number|string;imageUrl:string|null;isPopular:boolean;isActive:boolean};type Form={categoryId:string;name:string;description:string;price:string;isPopular:boolean;isActive:boolean};const empty:Form={categoryId:'',name:'',description:'',price:'',isPopular:false,isActive:true};const types=['image/jpeg','image/png','image/webp'];
-export default function MenuPage(){const router=useRouter();const[items,setItems]=useState<Item[]>([]),[categories,setCategories]=useState<Category[]>([]),[form,setForm]=useState<Form>(empty),[editing,setEditing]=useState<Item|null>(null),[q,setQ]=useState(''),[filter,setFilter]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[success,setSuccess]=useState(''),[file,setFile]=useState<File|null>(null),[preview,setPreview]=useState('');useEffect(()=>()=>{if(preview)URL.revokeObjectURL(preview)},[preview]);
-async function load(){const p=new URLSearchParams();if(q)p.set('q',q);if(filter)p.set('categoryId',filter);const r=await fetch(`/api/admin/menu-items${p.size?`?${p}`:''}`,{cache:'no-store'}),d=await r.json().catch(()=>null);if(r.status===401||r.status===403){router.replace('/admin');return}if(!r.ok||!d?.success)throw new Error(d?.error||'Unable to load menu items.');setItems(d.data)}
-useEffect(()=>{async function init(){try{const s=await fetch('/api/admin/session/me',{cache:'no-store'}),d=await s.json().catch(()=>null);if(!s.ok||!d?.user){router.replace('/admin');return}if(d.user.mustChangePassword){router.replace('/admin/change-password');return}const c=await fetch('/api/admin/categories',{cache:'no-store'}),cd=await c.json().catch(()=>null);if(!c.ok||!cd?.success)throw new Error(cd?.error||'Unable to load categories.');setCategories(cd.data.filter((x:Category)=>x.name.toLowerCase()!=='popular'));await load()}catch(e){setError(e instanceof Error?e.message:'Unable to load menu.')}finally{setLoading(false)}}void init()// eslint-disable-next-line react-hooks/exhaustive-deps
-},[router]);function set<K extends keyof Form>(k:K,v:Form[K]){setForm(x=>({...x,[k]:v}))}function clearPreview(){if(preview)URL.revokeObjectURL(preview);setPreview('');setFile(null)}function reset(){setEditing(null);setForm(empty);clearPreview()}function choose(f:File|null){clearPreview();if(!f)return;if(!types.includes(f.type)){setError('Use a JPG, PNG, or WebP image.');return}if(f.size>5*1024*1024){setError('Image files must be 5 MB or smaller.');return}setFile(f);setPreview(URL.createObjectURL(f))}
-async function save(e:FormEvent){e.preventDefault();setBusy(true);setError('');setSuccess('');const body={categoryId:Number(form.categoryId),name:form.name.trim(),description:form.description.trim()||null,price:Number(form.price),isPopular:form.isPopular,isActive:form.isActive};try{const r=await fetch(editing?`/api/admin/menu-items/${editing.id}`:'/api/admin/menu-items',{method:editing?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),d=await r.json().catch(()=>null);if(!r.ok||!d?.success)throw new Error(d?.error||'Unable to save menu item.');await load();reset();setSuccess(editing?'Menu item updated.':'Menu item created.')}catch(e){setError(e instanceof Error?e.message:'Unable to save menu item.')}finally{setBusy(false)}}async function upload(){if(!editing||!file)return;setBusy(true);setError('');setSuccess('');try{const fd=new FormData();fd.set('file',file);const u=await fetch('/api/admin/menu-items/upload-image',{method:'POST',body:fd}),ud=await u.json().catch(()=>null);if(!u.ok||!ud?.success||!ud.data?.url)throw new Error(ud?.error||'Unable to upload image.');const p=await fetch(`/api/admin/menu-items/${editing.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({imageUrl:ud.data.url})}),pd=await p.json().catch(()=>null);if(!p.ok||!pd?.success)throw new Error(`Image uploaded, but it could not be saved to this item: ${pd?.error||'Please try saving again.'}`);setEditing({...editing,imageUrl:ud.data.url});setItems(xs=>xs.map(x=>x.id===editing.id?{...x,imageUrl:ud.data.url}:x));clearPreview();setSuccess('Image uploaded and saved.')}catch(e){setError(e instanceof Error?e.message:'Unable to upload image.')}finally{setBusy(false)}}async function remove(item:Item){if(!confirm(`Delete ${item.name}? This cannot be undone.`))return;setBusy(true);setError('');try{const r=await fetch(`/api/admin/menu-items/${item.id}`,{method:'DELETE'}),d=await r.json().catch(()=>null);if(!r.ok||!d?.success)throw new Error(d?.error||'Unable to delete menu item.');await load();setSuccess('Menu item deleted.')}catch(e){setError(e instanceof Error?e.message:'Unable to delete menu item.')}finally{setBusy(false)}}
-async function move(index:number,direction:-1|1){const target=index+direction;if(target<0||target>=items.length)return;setBusy(true);setError('');setSuccess('');const next=[...items];[next[index],next[target]]=[next[target],next[index]];try{const r=await fetch('/api/admin/menu-items/reorder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:next.map((item,sortOrder)=>({id:item.id,sortOrder}))})}),d=await r.json().catch(()=>null);if(!r.ok||!d?.success)throw new Error(d?.error||'Unable to reorder menu items.');await load();setSuccess('Menu item order updated.')}catch(e){setError(e instanceof Error?e.message:'Unable to reorder menu items.')}finally{setBusy(false)}}const canReorder=!q.trim()&&Boolean(filter);
-if(loading)return <main className={styles.page}><p role="status">Loading menu items…</p></main>;return <main className={styles.page}><section className={styles.layout}><header><div><p>Kebab Gyros</p><h1>Menu items</h1></div><Link href="/admin/dashboard">Back to dashboard</Link></header>{error&&<p className={styles.error} role="alert">{error}</p>}{success&&<p className={styles.success} role="status">{success}</p>}<div className={styles.filters}><input aria-label="Search menu items" placeholder="Search menu items" value={q} onChange={e=>setQ(e.target.value)}/><select aria-label="Filter by category" value={filter} onChange={e=>setFilter(e.target.value)}><option value="">All categories</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select><button disabled={busy} onClick={()=>{setBusy(true);load().catch(e=>setError(e.message)).finally(()=>setBusy(false))}}>Search</button></div><div className={styles.columns}><form onSubmit={save}><h2>{editing?'Edit item':'Add item'}</h2><label>Category<select value={form.categoryId} onChange={e=>set('categoryId',e.target.value)} required disabled={busy}><option value="">Choose a category</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Name<input value={form.name} onChange={e=>set('name',e.target.value)} required disabled={busy}/></label><label>Description<textarea value={form.description} onChange={e=>set('description',e.target.value)} disabled={busy}/></label><label>Price<input type="number" min="0" step="0.01" value={form.price} onChange={e=>set('price',e.target.value)} required disabled={busy}/></label><label><input type="checkbox" checked={form.isPopular} onChange={e=>set('isPopular',e.target.checked)} disabled={busy}/> Popular</label><label><input type="checkbox" checked={form.isActive} onChange={e=>set('isActive',e.target.checked)} disabled={busy}/> Active</label>{editing&&<div className={styles.imagePanel}><h3>Item photo</h3>{editing.imageUrl&&<p>Current image: {editing.imageUrl}</p>}{preview&&<img className={styles.preview} src={preview} alt="Selected replacement preview"/>}<label>Choose JPG, PNG, or WebP image (5 MB max)<input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e=>choose(e.target.files?.[0]||null)}/></label><button type="button" disabled={busy||!file} onClick={upload}>{busy?'Uploading…':'Upload and save photo'}</button></div>}<button disabled={busy}>{busy?'Saving…':editing?'Save changes':'Add item'}</button>{editing&&<button type="button" disabled={busy} onClick={reset}>Cancel</button>}</form><section><h2>Items</h2>{!canReorder&&<p className={styles.empty}>Select one category and clear search to reorder.</p>}{items.length===0?<p className={styles.empty}>No menu items match these filters.</p>:<ul>{items.map((i,index)=><li key={i.id}><div><strong>{i.name}</strong><span>{i.categoryName} · ${Number(i.price).toFixed(2)} · {i.isPopular?'Popular':'Not popular'} · {i.isActive?'Active':'Inactive'}</span></div><div><button disabled={busy||!canReorder||index===0} onClick={()=>move(index,-1)} aria-label={`Move ${i.name} up`}>Up</button><button disabled={busy||!canReorder||index===items.length-1} onClick={()=>move(index,1)} aria-label={`Move ${i.name} down`}>Down</button><button disabled={busy} onClick={()=>{reset();setEditing(i);setForm({categoryId:String(i.categoryId),name:i.name,description:i.description||'',price:String(i.price),isPopular:i.isPopular,isActive:i.isActive})}}>Edit</button><button disabled={busy} onClick={()=>remove(i)}>Delete</button></div></li>)}</ul>}</section></div></section></main>}
+
+import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import AdminShell from '../../../components/admin/AdminShell';
+import styles from './page.module.css';
+
+type Category = { id: number; name: string };
+type AdminUser = { username: string; role: string; mustChangePassword: boolean };
+type Item = { id: number; categoryId: number; categoryName: string; name: string; description: string | null; price: number | string; imageUrl: string | null; isPopular: boolean | 0 | 1; isActive: boolean | 0 | 1 };
+type FormValues = { categoryId: string; name: string; description: string; price: string; isPopular: boolean; isActive: boolean };
+
+const emptyForm: FormValues = { categoryId: '', name: '', description: '', price: '', isPopular: false, isActive: true };
+const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
+const toBoolean = (value: boolean | 0 | 1) => value === true || value === 1;
+
+export default function MenuPage() {
+  const router = useRouter();
+  const [items, setItems] = useState<Item[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
+  const [form, setForm] = useState<FormValues>(emptyForm);
+  const [editing, setEditing] = useState<Item | null>(null);
+  const [query, setQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState('');
+
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+
+  async function load() {
+    const params = new URLSearchParams();
+    if (query) params.set('q', query);
+    if (categoryFilter) params.set('categoryId', categoryFilter);
+    const response = await fetch(`/api/admin/menu-items${params.size ? `?${params}` : ''}`, { cache: 'no-store' });
+    const payload = await response.json().catch(() => null);
+    if (response.status === 401 || response.status === 403) { router.replace('/admin'); return; }
+    if (!response.ok || !payload?.success) throw new Error(payload?.error || 'Unable to load menu items.');
+    setItems(payload.data);
+  }
+
+  useEffect(() => {
+    async function initialize() {
+      try {
+        const session = await fetch('/api/admin/session/me', { cache: 'no-store' });
+        const sessionData = await session.json().catch(() => null);
+        if (!session.ok || !sessionData?.user) { router.replace('/admin'); return; }
+        if (sessionData.user.mustChangePassword) { router.replace('/admin/change-password'); return; }
+        setCurrentUser(sessionData.user);
+        const categoryResponse = await fetch('/api/admin/categories', { cache: 'no-store' });
+        const categoryData = await categoryResponse.json().catch(() => null);
+        if (!categoryResponse.ok || !categoryData?.success) throw new Error(categoryData?.error || 'Unable to load categories.');
+        setCategories(categoryData.data.filter((category: Category) => category.name.toLowerCase() !== 'popular'));
+        await load();
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : 'Unable to load menu.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    void initialize();
+  // The initial protected load runs once; searches and mutations explicitly refresh results.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
+
+  function updateForm<Key extends keyof FormValues>(key: Key, value: FormValues[Key]) { setForm((current) => ({ ...current, [key]: value })); }
+  function clearPreview() { if (preview) URL.revokeObjectURL(preview); setPreview(''); setFile(null); }
+  function resetForm() { setEditing(null); setForm(emptyForm); clearPreview(); }
+
+  function chooseFile(selected: File | null) {
+    clearPreview();
+    if (!selected) return;
+    if (!allowedImageTypes.includes(selected.type)) { setError('Use a JPG, PNG, or WebP image.'); return; }
+    if (selected.size > 5 * 1024 * 1024) { setError('Image files must be 5 MB or smaller.'); return; }
+    setFile(selected);
+    setPreview(URL.createObjectURL(selected));
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError(''); setSuccess('');
+    const body = { categoryId: Number(form.categoryId), name: form.name.trim(), description: form.description.trim() || null, price: Number(form.price), isPopular: form.isPopular, isActive: form.isActive };
+    try {
+      const response = await fetch(editing ? `/api/admin/menu-items/${editing.id}` : '/api/admin/menu-items', { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) throw new Error(payload?.error || 'Unable to save menu item.');
+      await load(); resetForm(); setSuccess(editing ? 'Menu item updated.' : 'Menu item created.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to save menu item.');
+    } finally { setBusy(false); }
+  }
+
+  async function uploadImage() {
+    if (!editing || !file) return;
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      const formData = new FormData(); formData.set('file', file);
+      const uploadResponse = await fetch('/api/admin/menu-items/upload-image', { method: 'POST', body: formData });
+      const uploadData = await uploadResponse.json().catch(() => null);
+      if (!uploadResponse.ok || !uploadData?.success || !uploadData.data?.url) throw new Error(uploadData?.error || 'Unable to upload image.');
+      const patchResponse = await fetch(`/api/admin/menu-items/${editing.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: uploadData.data.url }) });
+      const patchData = await patchResponse.json().catch(() => null);
+      if (!patchResponse.ok || !patchData?.success) throw new Error(`Image uploaded, but it could not be saved to this item: ${patchData?.error || 'Please try saving again.'}`);
+      setEditing({ ...editing, imageUrl: uploadData.data.url });
+      setItems((current) => current.map((item) => item.id === editing.id ? { ...item, imageUrl: uploadData.data.url } : item));
+      clearPreview(); setSuccess('Image uploaded and saved.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to upload image.');
+    } finally { setBusy(false); }
+  }
+
+  async function removeItem(item: Item) {
+    if (!window.confirm(`Delete ${item.name}? This cannot be undone.`)) return;
+    setBusy(true); setError('');
+    try {
+      const response = await fetch(`/api/admin/menu-items/${item.id}`, { method: 'DELETE' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) throw new Error(payload?.error || 'Unable to delete menu item.');
+      await load(); setSuccess('Menu item deleted.');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to delete menu item.'); }
+    finally { setBusy(false); }
+  }
+
+  async function move(index: number, direction: -1 | 1) {
+    const destination = index + direction;
+    if (destination < 0 || destination >= items.length) return;
+    setBusy(true); setError(''); setSuccess('');
+    const reordered = [...items]; [reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
+    try {
+      const response = await fetch('/api/admin/menu-items/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: reordered.map((item, sortOrder) => ({ id: item.id, sortOrder })) }) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) throw new Error(payload?.error || 'Unable to reorder menu items.');
+      await load(); setSuccess('Menu item order updated.');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to reorder menu items.'); }
+    finally { setBusy(false); }
+  }
+
+  function beginEdit(item: Item) {
+    resetForm(); setEditing(item);
+    setForm({ categoryId: String(item.categoryId), name: item.name, description: item.description || '', price: String(item.price), isPopular: toBoolean(item.isPopular), isActive: toBoolean(item.isActive) });
+  }
+
+  const canReorder = !query.trim() && Boolean(categoryFilter);
+  if (loading) return <main className={styles.page}><p role="status">Loading menu items…</p></main>;
+  if (!currentUser) return <main className={styles.page}><p className={styles.error} role="alert">The admin session is unavailable.</p></main>;
+
+  return <AdminShell username={currentUser.username} role={currentUser.role} title="Menu Management">
+    <section className={styles.layout} aria-labelledby="menu-title">
+      <div className={styles.intro}><div><p className={styles.eyebrow}>Kebab Gyros</p><h2 id="menu-title">Menu items</h2><p>Manage menu details, availability, and item order.</p></div></div>
+      {error && <p className={styles.error} role="alert">{error}</p>}
+      {success && <p className={styles.success} role="status">{success}</p>}
+      <section className={styles.toolbar} aria-label="Menu filters"><label>Search menu items<input placeholder="Search by name" value={query} onChange={(event) => setQuery(event.target.value)} disabled={busy}/></label><label>Category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} disabled={busy}><option value="">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><button disabled={busy} onClick={() => { setBusy(true); load().catch((reason) => setError(reason.message)).finally(() => setBusy(false)); }}>Search</button></section>
+      <div className={styles.columns}>
+        <form className={styles.form} onSubmit={save}><div><p className={styles.eyebrow}>Menu item</p><h3>{editing ? 'Edit item' : 'Add item'}</h3></div><label>Category<select value={form.categoryId} onChange={(event) => updateForm('categoryId', event.target.value)} required disabled={busy}><option value="">Choose a category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label>Name<input value={form.name} onChange={(event) => updateForm('name', event.target.value)} required disabled={busy}/></label><label>Description<textarea value={form.description} onChange={(event) => updateForm('description', event.target.value)} disabled={busy}/></label><label>Price<input type="number" min="0" step="0.01" value={form.price} onChange={(event) => updateForm('price', event.target.value)} required disabled={busy}/></label><div className={styles.checks}><label><input type="checkbox" checked={form.isPopular} onChange={(event) => updateForm('isPopular', event.target.checked)} disabled={busy}/> Popular</label><label><input type="checkbox" checked={form.isActive} onChange={(event) => updateForm('isActive', event.target.checked)} disabled={busy}/> Active</label></div>{editing && <section className={styles.imagePanel} aria-labelledby="photo-title"><h4 id="photo-title">Item photo</h4>{editing.imageUrl && <p className={styles.currentImage}>Current image saved.</p>}{preview && <img className={styles.preview} src={preview} alt="Selected replacement preview"/>}<label>Choose JPG, PNG, or WebP image (5 MB max)<input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={(event) => chooseFile(event.target.files?.[0] || null)}/></label><button type="button" className={styles.secondary} disabled={busy || !file} onClick={uploadImage}>{busy ? 'Uploading…' : 'Upload and save photo'}</button></section>}<div className={styles.formActions}><button disabled={busy}>{busy ? 'Saving…' : editing ? 'Save changes' : 'Add item'}</button>{editing && <button type="button" className={styles.secondary} disabled={busy} onClick={resetForm}>Cancel</button>}</div></form>
+        <section className={styles.listPanel} aria-labelledby="item-list-title"><div className={styles.listHeading}><div><p className={styles.eyebrow}>Current menu</p><h3 id="item-list-title">Items</h3></div>{!canReorder && <p className={styles.reorderNote}>Select one category and clear search to reorder.</p>}</div>{items.length === 0 ? <p className={styles.empty}>No menu items match these filters.</p> : <div className={styles.tableWrap}><table><thead><tr><th>Name</th><th>Category</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead><tbody>{items.map((item, index) => <tr key={item.id}><td><strong>{item.name}</strong>{item.description && <span className={styles.description}>{item.description}</span>}</td><td><span className={styles.badge}>{item.categoryName}</span></td><td>${Number(item.price).toFixed(2)}</td><td><span className={`${styles.status} ${item.isActive ? styles.active : styles.inactive}`}>{item.isActive ? 'Active' : 'Inactive'}</span>{item.isPopular && <span className={styles.popular}>Popular</span>}</td><td><div className={styles.rowActions}><button disabled={busy || !canReorder || index === 0} onClick={() => move(index, -1)} aria-label={`Move ${item.name} up`}>Up</button><button disabled={busy || !canReorder || index === items.length - 1} onClick={() => move(index, 1)} aria-label={`Move ${item.name} down`}>Down</button><button disabled={busy} onClick={() => beginEdit(item)}>Edit</button><button disabled={busy} className={styles.delete} onClick={() => removeItem(item)}>Delete</button></div></td></tr>)}</tbody></table></div>}</section>
+      </div>
+    </section>
+  </AdminShell>;
+}

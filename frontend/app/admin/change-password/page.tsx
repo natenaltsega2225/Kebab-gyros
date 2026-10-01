@@ -8,6 +8,7 @@ export default function ChangePasswordPage() {
   const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState('');
@@ -31,6 +32,10 @@ export default function ChangePasswordPage() {
     event.preventDefault();
     setError('');
     setSuccess('');
+    if (newPassword !== confirmNewPassword) {
+      setError('New password confirmation does not match.');
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -46,11 +51,10 @@ export default function ChangePasswordPage() {
       }
       setCurrentPassword('');
       setNewPassword('');
-      setSuccess('Password changed. Returning to admin…');
-      window.setTimeout(() => {
-        router.replace('/admin');
-        router.refresh();
-      }, 750);
+      setConfirmNewPassword('');
+      setSuccess('Password changed. Signing out…');
+      await fetch('/api/admin/session/logout', { method: 'POST' });
+      router.replace('/admin');
     } catch {
       setError('Unable to change password. Please try again.');
     } finally {
@@ -69,10 +73,12 @@ export default function ChangePasswordPage() {
         <h1 id="change-password-title">Change password</h1>
         <p className={styles.policy}>Use at least 12 characters, including an uppercase letter, lowercase letter, number, and symbol.</p>
         <form className={styles.form} onSubmit={handleSubmit}>
-          <label htmlFor="current-password">Current password</label>
+          <label htmlFor="current-password">Current/Temporary Password</label>
           <input id="current-password" name="currentPassword" type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} disabled={isSubmitting} required />
           <label htmlFor="new-password">New password</label>
           <input id="new-password" name="newPassword" type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} disabled={isSubmitting} required />
+          <label htmlFor="confirm-new-password">Confirm New Password</label>
+          <input id="confirm-new-password" name="confirmNewPassword" type="password" autoComplete="new-password" minLength={12} value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} disabled={isSubmitting} required />
           {error && <p className={styles.error} role="alert">{error}</p>}
           {success && <p className={styles.notice} role="status">{success}</p>}
           <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Changing password…' : 'Change password'}</button>

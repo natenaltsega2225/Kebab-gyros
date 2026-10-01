@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import styles from './admin.module.css';
 
 type AdminUser = {
@@ -11,7 +12,8 @@ type AdminUser = {
 };
 
 export default function AdminPage() {
-  const [user, setUser] = useState<AdminUser | null>(null);
+  const router = useRouter();
+  const [user] = useState<AdminUser | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -23,7 +25,10 @@ export default function AdminPage() {
       try {
         const response = await fetch('/api/admin/session/me', { cache: 'no-store' });
         const payload = await response.json();
-        if (response.ok && payload.user) setUser(payload.user);
+        if (response.ok && payload.user) {
+          const mustChangePassword = Boolean(payload.user.mustChangePassword);
+          router.replace(mustChangePassword ? '/admin/change-password' : '/admin/dashboard');
+        }
       } catch {
         // An unavailable session check leaves the sign-in form available.
       } finally {
@@ -31,7 +36,7 @@ export default function AdminPage() {
       }
     }
     void verifySession();
-  }, []);
+  }, [router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,7 +54,7 @@ export default function AdminPage() {
         setError(payload.error || 'Unable to sign in.');
         return;
       }
-      setUser(payload.user);
+      router.replace(Boolean(payload.user.mustChangePassword) ? '/admin/change-password' : '/admin/dashboard');
       setPassword('');
     } catch {
       setError('Unable to sign in. Please try again.');
@@ -67,15 +72,16 @@ export default function AdminPage() {
           <div className={styles.welcome}>
             <p>Signed in as <strong>{user.username}</strong></p>
             <p>Role: <strong>{user.role}</strong></p>
-            {user.mustChangePassword && <p className={styles.notice} role="status"><Link href="/admin/change-password">Password change required.</Link></p>}
-            {!user.mustChangePassword && <Link className={styles.dashboardLink} href="/admin/dashboard">Go to dashboard</Link>}
+            {Boolean(user.mustChangePassword) && <p className={styles.notice} role="status"><Link href="/admin/change-password">Password change required.</Link></p>}
+            {!Boolean(user.mustChangePassword) && <Link className={styles.dashboardLink} href="/admin/dashboard">Go to dashboard</Link>}
           </div>
         ) : (
           <form className={styles.form} onSubmit={handleSubmit}>
-            <label htmlFor="username">Username</label>
+            <label htmlFor="username">Email or username</label>
             <input id="username" name="username" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} disabled={isSubmitting} required />
             <label htmlFor="password">Password</label>
             <input id="password" name="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} disabled={isSubmitting} required />
+            <Link href="/admin/forgot-password">Forgot password?</Link>
             {error && <p className={styles.error} role="alert">{error}</p>}
             <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing in…' : 'Sign in'}</button>
           </form>

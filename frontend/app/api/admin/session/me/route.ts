@@ -23,8 +23,7 @@ function isAllowedApiBaseUrl(value: string | undefined) {
   try {
     const url = new URL(value);
     if (url.protocol === 'https:') return true;
-    return process.env.NODE_ENV === 'development'
-      && url.protocol === 'http:'
+    return url.protocol === 'http:'
       && (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
   } catch {
     return false;

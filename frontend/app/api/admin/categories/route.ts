@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 const SESSION_COOKIE = 'admin_session';
 const CATEGORY_FIELDS = ['name', 'slug', 'sortOrder', 'isActive'] as const;
 
-function allowedUrl(value: string | undefined) { try { const url = new URL(value || ''); return url.protocol === 'https:' || (process.env.NODE_ENV === 'development' && url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')); } catch { return false; } }
+function allowedUrl(value: string | undefined) { try { const url = new URL(value || ''); return url.protocol === 'https:' || (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')); } catch { return false; } }
 function validCategory(value: unknown, partial = false) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const body = value as Record<string, unknown>;

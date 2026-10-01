@@ -8,7 +8,7 @@ const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 function allowedUrl(value: string | undefined) {
   try {
     const url = new URL(value || '');
-    return url.protocol === 'https:' || (process.env.NODE_ENV === 'development' && url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1'));
+    return url.protocol === 'https:' || (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1'));
   } catch {
     return false;
   }
