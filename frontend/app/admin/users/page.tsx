@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, MouseEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminShell from '../../../components/admin/AdminShell';
 import styles from './page.module.css';
@@ -16,6 +16,7 @@ type User = {
 
 type CreateForm = Pick<User, 'email' | 'fullName' | 'role'> & { username: string };
 type EditableUser = Omit<User, 'isActive'> & { isActive: boolean };
+type OpenActions = { id: number; top: number; left: number };
 const blank: CreateForm = { username: '', email: '', fullName: '', role: 'manager' };
 
 export default function Users() {
@@ -34,6 +35,19 @@ export default function Users() {
   const [denied, setDenied] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [openActions, setOpenActions] = useState<OpenActions | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRefs = useRef(new Map<number, HTMLButtonElement>());
+
+  useEffect(() => {
+    if (!openActions) return;
+    const active = openActions;
+    const close = () => setOpenActions(null);
+    const outside = (event: PointerEvent) => { const target = event.target as Node; if (!menuRef.current?.contains(target) && !triggerRefs.current.get(active.id)?.contains(target)) close(); };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); close(); triggerRefs.current.get(active.id)?.focus(); } };
+    document.addEventListener('pointerdown', outside); document.addEventListener('keydown', escape); document.addEventListener('scroll', close, true); window.addEventListener('resize', close);
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); document.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
+  }, [openActions]);
 
   async function load(next = page) {
     const q = new URLSearchParams({ page: String(next), pageSize: '25' });
@@ -137,6 +151,11 @@ export default function Users() {
   function beginEdit(user: User) {
     setEdit({ ...user, isActive: user.isActive === true || user.isActive === 1 });
   }
+  function toggleActions(id: number, event: MouseEvent<HTMLButtonElement>) {
+    if (openActions?.id === id) { setOpenActions(null); return; }
+    const rect = event.currentTarget.getBoundingClientRect(); const width = 196; const height = 140;
+    setOpenActions({ id, left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)), top: window.innerHeight - rect.bottom >= height + 8 ? rect.bottom + 6 : Math.max(8, rect.top - height - 6) });
+  }
 
   async function deleteUser(user: User) {
     if (busy || user.id === me?.id) return;
@@ -230,11 +249,15 @@ export default function Users() {
       {users.length === 0 ? <p className={styles.empty}>No users match these filters.</p> : <div className={styles.tableWrap}><table><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>{users.map(u => <tr key={u.id}>
         <td><strong>{u.fullName}</strong><span className={styles.userMeta}>{u.username} · {u.email}</span></td><td><span className={styles.roleBadge}>{u.role === 'admin' ? 'Admin' : 'Manager'}</span></td><td><span className={`${styles.statusBadge} ${u.isActive ? styles.active : styles.inactive}`}>{u.isActive ? 'Active' : 'Inactive'}</span></td>
         <td>
-        <div className={styles.actions}>
-          <button disabled={busy} onClick={() => beginEdit(u)}>Edit</button>
-          <button disabled={busy || !u.isActive} onClick={() => void resetPassword(u)}>Reset password</button>
-          <button className={styles.delete} disabled={busy || u.id === me.id} onClick={() => void deleteUser(u)}>Delete</button>
-        </div>
+        {(() => {
+          const isOpen = openActions?.id === u.id;
+          const isActive = u.isActive === true || u.isActive === 1;
+          return <><button ref={(element) => { if (element) triggerRefs.current.set(u.id, element); else triggerRefs.current.delete(u.id); }} type="button" className={styles.actionsTrigger} aria-label={`Actions for ${u.username}`} aria-haspopup="true" aria-expanded={isOpen} aria-controls={`user-actions-${u.id}`} disabled={busy} onClick={(event) => toggleActions(u.id, event)}>•••</button>{isOpen && <div ref={menuRef} id={`user-actions-${u.id}`} className={styles.actionsMenu} style={{ top: openActions.top, left: openActions.left }} aria-label={`Actions for ${u.username}`}>
+            <button type="button" onClick={() => { setOpenActions(null); beginEdit(u); }}>Edit</button>
+            <button type="button" disabled={busy || !isActive} title={!isActive ? 'Inactive accounts cannot be reset.' : undefined} onClick={() => { setOpenActions(null); void resetPassword(u); }}>Reset password</button>
+            <button type="button" className={styles.delete} disabled={busy || u.id === me.id} title={u.id === me.id ? 'You cannot delete your own account.' : undefined} onClick={() => { setOpenActions(null); void deleteUser(u); }}>Delete</button>
+          </div>}</>;
+        })()}
         </td>
       </tr>)}</tbody></table></div>}
       <div className={styles.pagination}><button disabled={page === 1 || busy} onClick={() => load(page - 1).catch(e => setError(e.message))}>Previous</button><span>Page {page} of {pages}</span><button disabled={page >= pages || busy} onClick={() => load(page + 1).catch(e => setError(e.message))}>Next</button></div>

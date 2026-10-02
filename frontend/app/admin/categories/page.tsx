@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, MouseEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminShell from '../../../components/admin/AdminShell';
 import styles from './page.module.css';
@@ -8,6 +8,7 @@ import styles from './page.module.css';
 type Category = { id: number; name: string; slug: string; sortOrder: number; isActive: boolean | 0 | 1 };
 type FormValues = { name: string; slug: string; sortOrder: string; isActive: boolean };
 type AdminUser = { username: string; role: string; mustChangePassword: boolean };
+type OpenActions = { id: number; top: number; left: number };
 
 const emptyForm: FormValues = { name: '', slug: '', sortOrder: '0', isActive: true };
 const toBoolean = (value: boolean | 0 | 1) => value === true || value === 1;
@@ -22,6 +23,22 @@ export default function CategoriesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [openActions, setOpenActions] = useState<OpenActions | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRefs = useRef(new Map<number, HTMLButtonElement>());
+
+  useEffect(() => {
+    if (!openActions) return;
+    const active = openActions;
+    const close = () => setOpenActions(null);
+    const outside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target) && !triggerRefs.current.get(active.id)?.contains(target)) close();
+    };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); close(); triggerRefs.current.get(active.id)?.focus(); } };
+    document.addEventListener('pointerdown', outside); document.addEventListener('keydown', escape); document.addEventListener('scroll', close, true); window.addEventListener('resize', close);
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); document.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
+  }, [openActions]);
 
   async function loadCategories() {
     const response = await fetch('/api/admin/categories', { cache: 'no-store' });
@@ -92,6 +109,11 @@ export default function CategoriesPage() {
   }
 
   function beginEdit(category: Category) { setEditing(category); setForm({ name: category.name, slug: category.slug, sortOrder: String(category.sortOrder), isActive: toBoolean(category.isActive) }); }
+  function toggleActions(id: number, event: MouseEvent<HTMLButtonElement>) {
+    if (openActions?.id === id) { setOpenActions(null); return; }
+    const rect = event.currentTarget.getBoundingClientRect(); const width = 196; const height = 148;
+    setOpenActions({ id, left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)), top: window.innerHeight - rect.bottom >= height + 8 ? rect.bottom + 6 : Math.max(8, rect.top - height - 6) });
+  }
 
   if (loading) return <main className={styles.page}><p role="status">Loading categories…</p></main>;
   if (!currentUser) return <main className={styles.page}><p className={styles.error} role="alert">The admin session is unavailable.</p></main>;
@@ -103,7 +125,15 @@ export default function CategoriesPage() {
       {success && <p className={styles.success} role="status">{success}</p>}
       <div className={styles.columns}>
         <form className={styles.form} onSubmit={submit}><div><p className={styles.eyebrow}>Category details</p><h3>{editing ? 'Edit category' : 'Add category'}</h3></div><label htmlFor="category-name">Name<input id="category-name" value={form.name} onChange={(event) => updateForm('name', event.target.value)} disabled={saving} required maxLength={80}/></label><label htmlFor="category-slug">Slug<input id="category-slug" value={form.slug} onChange={(event) => updateForm('slug', event.target.value)} disabled={saving} required maxLength={80} pattern="[a-z0-9-]+"/></label><label htmlFor="category-order">Sort order<input id="category-order" type="number" min="0" value={form.sortOrder} onChange={(event) => updateForm('sortOrder', event.target.value)} disabled={saving} required/></label><label className={styles.checkbox}><input type="checkbox" checked={form.isActive} onChange={(event) => updateForm('isActive', event.target.checked)} disabled={saving}/> Active</label><div className={styles.actions}><button disabled={saving} type="submit">{saving ? 'Saving…' : editing ? 'Save changes' : 'Add category'}</button>{editing && <button disabled={saving} type="button" className={styles.secondary} onClick={resetForm}>Cancel</button>}</div></form>
-        <section className={styles.listPanel} aria-labelledby="category-list-title"><div className={styles.listHeading}><div><p className={styles.eyebrow}>Current categories</p><h3 id="category-list-title">Stored categories</h3></div><p>“Popular” is virtual and is not managed here.</p></div>{categories.length === 0 ? <p className={styles.empty}>No stored categories yet. “Popular” is virtual and is not managed here.</p> : <div className={styles.tableWrap}><table><thead><tr><th>Name</th><th>Slug</th><th>Status</th><th>Sort Order</th><th>Actions</th></tr></thead><tbody>{categories.map((category, index) => <tr key={category.id}><td><strong>{category.name}</strong></td><td>/{category.slug}</td><td><span className={`${styles.status} ${category.isActive ? styles.active : styles.inactive}`}>{category.isActive ? 'Active' : 'Inactive'}</span></td><td>{category.sortOrder}</td><td><div className={styles.rowActions}><button disabled={saving || index === 0} onClick={() => move(index, -1)} aria-label={`Move ${category.name} up`}>Up</button><button disabled={saving || index === categories.length - 1} onClick={() => move(index, 1)} aria-label={`Move ${category.name} down`}>Down</button><button disabled={saving} onClick={() => beginEdit(category)}>Edit</button><button disabled={saving} className={styles.delete} onClick={() => remove(category)}>Delete</button></div></td></tr>)}</tbody></table></div>}</section>
+        <section className={styles.listPanel} aria-labelledby="category-list-title"><div className={styles.listHeading}><div><p className={styles.eyebrow}>Current categories</p><h3 id="category-list-title">Stored categories</h3></div><p>“Popular” is virtual and is not managed here.</p></div>{categories.length === 0 ? <p className={styles.empty}>No stored categories yet. “Popular” is virtual and is not managed here.</p> : <div className={styles.tableWrap}><table><thead><tr><th>Name</th><th>Slug</th><th>Status</th><th>Sort Order</th><th>Actions</th></tr></thead><tbody>{categories.map((category, index) => {
+          const isOpen = openActions?.id === category.id;
+          return <tr key={category.id}><td><strong>{category.name}</strong></td><td>/{category.slug}</td><td><span className={`${styles.status} ${category.isActive ? styles.active : styles.inactive}`}>{category.isActive ? 'Active' : 'Inactive'}</span></td><td>{category.sortOrder}</td><td><button ref={(element) => { if (element) triggerRefs.current.set(category.id, element); else triggerRefs.current.delete(category.id); }} type="button" className={styles.actionsTrigger} aria-label={`Actions for ${category.name}`} aria-haspopup="true" aria-expanded={isOpen} aria-controls={`category-actions-${category.id}`} disabled={saving} onClick={(event) => toggleActions(category.id, event)}>•••</button>{isOpen && <div ref={menuRef} id={`category-actions-${category.id}`} className={styles.actionsMenu} style={{ top: openActions.top, left: openActions.left }} aria-label={`Actions for ${category.name}`}>
+            <button type="button" onClick={() => { setOpenActions(null); beginEdit(category); }}>Edit</button>
+            <button type="button" disabled={saving || index === 0} title={index === 0 ? 'This is already the first category.' : undefined} onClick={() => { setOpenActions(null); void move(index, -1); }}>Move up</button>
+            <button type="button" disabled={saving || index === categories.length - 1} title={index === categories.length - 1 ? 'This is already the last category.' : undefined} onClick={() => { setOpenActions(null); void move(index, 1); }}>Move down</button>
+            <button type="button" className={styles.delete} onClick={() => { setOpenActions(null); void remove(category); }}>Delete</button>
+          </div>}</td></tr>;
+        })}</tbody></table></div>}</section>
       </div>
     </section>
   </AdminShell>;
