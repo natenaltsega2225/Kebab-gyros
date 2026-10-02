@@ -14,8 +14,12 @@ type AdminUser = {
 
 type MeResponse = {
   success: boolean;
-  data?: AdminUser;
+  data?: Omit<AdminUser, 'mustChangePassword'> & { mustChangePassword: boolean | number | string };
 };
+
+function mustChangePassword(value: boolean | number | string) {
+  return value === true || value === 1 || value === '1';
+}
 
 function isAllowedApiBaseUrl(value: string | undefined) {
   if (!value) return false;
@@ -55,5 +59,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
-  return NextResponse.json({ user: payload.data });
+  return NextResponse.json({
+    user: { ...payload.data, mustChangePassword: mustChangePassword(payload.data.mustChangePassword) },
+  });
 }

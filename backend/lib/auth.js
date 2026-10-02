@@ -2,6 +2,10 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { db } from './db';
 
+export function isEnabledFlag(value) {
+  return value === true || value === 1 || value === '1';
+}
+
 function secret() {
   const value = process.env.JWT_SECRET;
   if (!value || value.length < 32) throw new Error('JWT_SECRET must be at least 32 characters');
@@ -33,8 +37,8 @@ export async function requireAuth(request, roles = ['admin', 'manager'], options
       [payload.jti, Number(payload.sub)]
     );
     const s = sessions[0];
-    if (!s || s.revoked_at || !s.is_active || new Date(s.expires_at) <= new Date()) return { ok: false, status: 401, error: 'Session expired or revoked' };
-    const mustChangePassword = Boolean(s.must_change_password);
+    if (!s || s.revoked_at || !isEnabledFlag(s.is_active) || new Date(s.expires_at) <= new Date()) return { ok: false, status: 401, error: 'Session expired or revoked' };
+    const mustChangePassword = isEnabledFlag(s.must_change_password);
     if (mustChangePassword && !options.allowMustChangePassword) return { ok: false, status: 403, error: 'Password change required', code: 'PASSWORD_CHANGE_REQUIRED' };
     return { ok: true, user: { ...payload, id: Number(payload.sub), mustChangePassword } };
   } catch {

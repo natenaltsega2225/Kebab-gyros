@@ -1,8 +1,8 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import styles from './admin.module.css';
 
 type AdminUser = {
@@ -11,11 +11,13 @@ type AdminUser = {
   mustChangePassword: boolean;
 };
 
-export default function AdminPage() {
+function AdminSignIn() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [user] = useState<AdminUser | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -26,7 +28,7 @@ export default function AdminPage() {
         const response = await fetch('/api/admin/session/me', { cache: 'no-store' });
         const payload = await response.json();
         if (response.ok && payload.user) {
-          const mustChangePassword = Boolean(payload.user.mustChangePassword);
+          const mustChangePassword = payload.user.mustChangePassword === true;
           router.replace(mustChangePassword ? '/admin/change-password' : '/admin/dashboard');
         }
       } catch {
@@ -54,7 +56,7 @@ export default function AdminPage() {
         setError(payload.error || 'Unable to sign in.');
         return;
       }
-      router.replace(Boolean(payload.user.mustChangePassword) ? '/admin/change-password' : '/admin/dashboard');
+      router.replace(payload.user.mustChangePassword === true ? '/admin/change-password' : '/admin/dashboard');
       setPassword('');
     } catch {
       setError('Unable to sign in. Please try again.');
@@ -72,15 +74,19 @@ export default function AdminPage() {
           <div className={styles.welcome}>
             <p>Signed in as <strong>{user.username}</strong></p>
             <p>Role: <strong>{user.role}</strong></p>
-            {Boolean(user.mustChangePassword) && <p className={styles.notice} role="status"><Link href="/admin/change-password">Password change required.</Link></p>}
-            {!Boolean(user.mustChangePassword) && <Link className={styles.dashboardLink} href="/admin/dashboard">Go to dashboard</Link>}
+            {user.mustChangePassword === true && <p className={styles.notice} role="status"><Link href="/admin/change-password">Password change required.</Link></p>}
+            {user.mustChangePassword !== true && <Link className={styles.dashboardLink} href="/admin/dashboard">Go to dashboard</Link>}
           </div>
         ) : (
           <form className={styles.form} onSubmit={handleSubmit}>
+            {searchParams.get('passwordChanged') === '1' && <p className={styles.notice} role="status">Password changed successfully. Sign in with your new password.</p>}
             <label htmlFor="username">Email or username</label>
             <input id="username" name="username" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} disabled={isSubmitting} required />
             <label htmlFor="password">Password</label>
-            <input id="password" name="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} disabled={isSubmitting} required />
+            <div className={styles.passwordField}>
+              <input id="password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} disabled={isSubmitting} required />
+              <button type="button" className={styles.passwordToggle} onClick={() => setShowPassword((visible) => !visible)} aria-label={`${showPassword ? 'Hide' : 'Show'} password`} aria-pressed={showPassword} disabled={isSubmitting}>{showPassword ? 'Hide' : 'Show'}</button>
+            </div>
             <Link href="/admin/forgot-password">Forgot password?</Link>
             {error && <p className={styles.error} role="alert">{error}</p>}
             <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing in…' : 'Sign in'}</button>
@@ -89,4 +95,8 @@ export default function AdminPage() {
       </section>
     </main>
   );
+}
+
+export default function AdminPage() {
+  return <Suspense fallback={<main className={styles.page}><p role="status">Loading sign in…</p></main>}><AdminSignIn /></Suspense>;
 }

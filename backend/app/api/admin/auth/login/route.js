@@ -1,7 +1,7 @@
 import { db } from '../../../../../lib/db';
 import { ok, fail } from '../../../../../lib/http';
 import { verifyPassword } from '../../../../../lib/security';
-import { createSession } from '../../../../../lib/auth';
+import { createSession, isEnabledFlag } from '../../../../../lib/auth';
 import { audit } from '../../../../../lib/audit';
 
 export async function POST(request) {
@@ -26,6 +26,6 @@ export async function POST(request) {
     await db.query(`UPDATE admin_users SET failed_login_count=0, locked_until=NULL, last_login_at=UTC_TIMESTAMP() WHERE id=?`, [user.id]);
     const token = await createSession(user,request);
     await audit(request,user.id,'LOGIN_SUCCESS','admin_user',user.id);
-    return ok({ token, user:{ id:user.id, username:user.username, email:user.email, fullName:user.full_name, role:user.role, mustChangePassword:Boolean(user.must_change_password) } });
+    return ok({ token, user:{ id:user.id, username:user.username, email:user.email, fullName:user.full_name, role:user.role, mustChangePassword:isEnabledFlag(user.must_change_password) } });
   } catch (e) { console.error(e); return fail('Unable to sign in',500); }
 }

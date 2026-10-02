@@ -9,6 +9,9 @@ export default function ChangePasswordPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState('');
@@ -52,9 +55,9 @@ export default function ChangePasswordPage() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmNewPassword('');
-      setSuccess('Password changed. Signing out…');
+      setSuccess('Password changed successfully. Signing out…');
       await fetch('/api/admin/session/logout', { method: 'POST' });
-      router.replace('/admin');
+      router.replace('/admin?passwordChanged=1');
     } catch {
       setError('Unable to change password. Please try again.');
     } finally {
@@ -74,11 +77,11 @@ export default function ChangePasswordPage() {
         <p className={styles.policy}>Use at least 12 characters, including an uppercase letter, lowercase letter, number, and symbol.</p>
         <form className={styles.form} onSubmit={handleSubmit}>
           <label htmlFor="current-password">Current/Temporary Password</label>
-          <input id="current-password" name="currentPassword" type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} disabled={isSubmitting} required />
+          <div className={styles.passwordField}><input id="current-password" name="currentPassword" type={showCurrentPassword ? 'text' : 'password'} autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} disabled={isSubmitting} required /><button type="button" className={styles.passwordToggle} onClick={() => setShowCurrentPassword((visible) => !visible)} aria-label={`${showCurrentPassword ? 'Hide' : 'Show'} current or temporary password`} aria-pressed={showCurrentPassword} disabled={isSubmitting}>{showCurrentPassword ? 'Hide' : 'Show'}</button></div>
           <label htmlFor="new-password">New password</label>
-          <input id="new-password" name="newPassword" type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} disabled={isSubmitting} required />
+          <div className={styles.passwordField}><input id="new-password" name="newPassword" type={showNewPassword ? 'text' : 'password'} autoComplete="new-password" minLength={12} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} disabled={isSubmitting} required /><button type="button" className={styles.passwordToggle} onClick={() => setShowNewPassword((visible) => !visible)} aria-label={`${showNewPassword ? 'Hide' : 'Show'} new password`} aria-pressed={showNewPassword} disabled={isSubmitting}>{showNewPassword ? 'Hide' : 'Show'}</button></div>
           <label htmlFor="confirm-new-password">Confirm New Password</label>
-          <input id="confirm-new-password" name="confirmNewPassword" type="password" autoComplete="new-password" minLength={12} value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} disabled={isSubmitting} required />
+          <div className={styles.passwordField}><input id="confirm-new-password" name="confirmNewPassword" type={showConfirmNewPassword ? 'text' : 'password'} autoComplete="new-password" minLength={12} value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} disabled={isSubmitting} required /><button type="button" className={styles.passwordToggle} onClick={() => setShowConfirmNewPassword((visible) => !visible)} aria-label={`${showConfirmNewPassword ? 'Hide' : 'Show'} password confirmation`} aria-pressed={showConfirmNewPassword} disabled={isSubmitting}>{showConfirmNewPassword ? 'Hide' : 'Show'}</button></div>
           {error && <p className={styles.error} role="alert">{error}</p>}
           {success && <p className={styles.notice} role="status">{success}</p>}
           <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Changing password…' : 'Change password'}</button>

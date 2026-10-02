@@ -5,6 +5,9 @@
 .form{display:grid;gap:.65rem}
 .form label{font-weight:700}
 .form input{width:100%;padding:.75rem;border:1px solid #9ba9a6;border-radius:.4rem;color:var(--ink);font:inherit}
+.passwordField{display:flex;align-items:stretch;gap:.5rem}
+.passwordField input{min-width:0}
+.form .passwordToggle{margin-top:0;padding:.5rem .75rem;white-space:nowrap}
 .form button{margin-top:.75rem;padding:.8rem 1rem;border:0;border-radius:.4rem;background:var(--blue);color:#fff;cursor:pointer;font-weight:700}
 .form button:disabled,.form input:disabled{opacity:.65;cursor:wait}
 .error,.notice{margin:1rem 0 0;padding:.75rem;border-radius:.4rem}
@@ -14,3 +17,4 @@
 .policy{color:#4b5a5d;line-height:1.5}
 .notice a{text-decoration:underline;font-weight:700}
 .dashboardLink{display:inline-block;margin-top:.5rem;color:var(--blue);font-weight:700;text-decoration:underline}
+@media (max-width:30rem){.passwordField{align-items:stretch}.form .passwordToggle{padding-inline:.65rem}}
