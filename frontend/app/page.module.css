@@ -268,7 +268,7 @@
 }
 
 .menuSection {
-  background: #fff8ed;
+  background: #f4d957;
 }
 
 .menuSection h2 {
@@ -434,7 +434,7 @@
 
 .footerGrid {
   display: grid;
-  grid-template-columns: 2fr 1fr 1.4fr 1fr;
+  grid-template-columns: 2fr 1fr 1.4fr;
   gap: 28px;
   padding: 32px 0 8px;
 }
@@ -465,11 +465,21 @@
 }
 
 .copyright {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
   border-top: 1px solid #c9ad37;
   margin: 24px 0 0;
   padding-top: 18px;
   color: #344b51;
   font-size: .85rem;
+}
+
+.copyright a {
+  color: #062b3a;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .sticky {
@@ -526,9 +536,6 @@
     grid-template-columns: 1.6fr 1fr 1.3fr;
   }
 
-  .footerGrid > div:last-child {
-    grid-column: 2 / span 2;
-  }
 }
 
 @media (max-width: 700px) {
@@ -685,10 +692,6 @@
     gap: 24px 18px;
   }
 
-  .footerGrid > div:last-child {
-    grid-column: auto;
-  }
-
   .sticky {
     position: fixed;
     right: 0;
@@ -788,10 +791,6 @@
 
   .footerGrid {
     grid-template-columns: 1fr;
-  }
-
-  .footerGrid > div:last-child {
-    grid-column: auto;
   }
 
   .hour {
