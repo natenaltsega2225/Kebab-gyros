@@ -116,30 +116,38 @@ export default function MenuPage() {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(''); setSuccess('');
-    const body = { categoryId: Number(form.categoryId), name: form.name.trim(), description: form.description.trim() || null, price: Number(form.price), isPopular: form.isPopular, isActive: form.isActive };
     try {
+      let imageUrl: string | undefined;
+      if (!editing && file) imageUrl = await uploadSelectedImage();
+      const body = { categoryId: Number(form.categoryId), name: form.name.trim(), description: form.description.trim() || null, price: Number(form.price), isPopular: form.isPopular, isActive: form.isActive, ...(imageUrl ? { imageUrl } : {}) };
       const response = await fetch(editing ? `/api/admin/menu-items/${editing.id}` : '/api/admin/menu-items', { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload?.success) throw new Error(payload?.error || 'Unable to save menu item.');
+      if (!response.ok || !payload?.success) throw new Error(imageUrl ? `Photo uploaded, but the item could not be created: ${payload?.error || 'Please try adding it again.'}` : payload?.error || 'Unable to save menu item.');
       await load(); resetForm(); setSuccess(editing ? 'Menu item updated.' : 'Menu item created.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to save menu item.');
     } finally { setBusy(false); }
   }
 
+  async function uploadSelectedImage() {
+    if (!file) throw new Error('Choose an image before uploading.');
+    const formData = new FormData(); formData.set('file', file);
+    const response = await fetch('/api/admin/menu-items/upload-image', { method: 'POST', body: formData });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.success || !payload.data?.url) throw new Error(payload?.error || 'Photo could not be uploaded. The item was not created; choose a valid image and try again.');
+    return payload.data.url as string;
+  }
+
   async function uploadImage() {
     if (!editing || !file) return;
     setBusy(true); setError(''); setSuccess('');
     try {
-      const formData = new FormData(); formData.set('file', file);
-      const uploadResponse = await fetch('/api/admin/menu-items/upload-image', { method: 'POST', body: formData });
-      const uploadData = await uploadResponse.json().catch(() => null);
-      if (!uploadResponse.ok || !uploadData?.success || !uploadData.data?.url) throw new Error(uploadData?.error || 'Unable to upload image.');
-      const patchResponse = await fetch(`/api/admin/menu-items/${editing.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: uploadData.data.url }) });
+      const imageUrl = await uploadSelectedImage();
+      const patchResponse = await fetch(`/api/admin/menu-items/${editing.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl }) });
       const patchData = await patchResponse.json().catch(() => null);
       if (!patchResponse.ok || !patchData?.success) throw new Error(`Image uploaded, but it could not be saved to this item: ${patchData?.error || 'Please try saving again.'}`);
-      setEditing({ ...editing, imageUrl: uploadData.data.url });
-      setItems((current) => current.map((item) => item.id === editing.id ? { ...item, imageUrl: uploadData.data.url } : item));
+      setEditing({ ...editing, imageUrl });
+      setItems((current) => current.map((item) => item.id === editing.id ? { ...item, imageUrl } : item));
       clearPreview(); setSuccess('Image uploaded and saved.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to upload image.');
@@ -198,7 +206,7 @@ export default function MenuPage() {
       {success && <p className={styles.success} role="status">{success}</p>}
       <section className={styles.toolbar} aria-label="Menu filters"><label>Search menu items<input placeholder="Search by name" value={query} onChange={(event) => setQuery(event.target.value)} disabled={busy}/></label><label>Category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} disabled={busy}><option value="">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><button disabled={busy} onClick={() => { setBusy(true); load().catch((reason) => setError(reason.message)).finally(() => setBusy(false)); }}>Search</button></section>
       <div className={styles.columns}>
-        <form className={styles.form} onSubmit={save}><div><p className={styles.eyebrow}>Menu item</p><h3>{editing ? 'Edit item' : 'Add item'}</h3></div><label>Category<select value={form.categoryId} onChange={(event) => updateForm('categoryId', event.target.value)} required disabled={busy}><option value="">Choose a category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label>Name<input value={form.name} onChange={(event) => updateForm('name', event.target.value)} required disabled={busy}/></label><label>Description<textarea value={form.description} onChange={(event) => updateForm('description', event.target.value)} disabled={busy}/></label><label>Price<input type="number" min="0" step="0.01" value={form.price} onChange={(event) => updateForm('price', event.target.value)} required disabled={busy}/></label><div className={styles.checks}><label><input type="checkbox" checked={form.isPopular} onChange={(event) => updateForm('isPopular', event.target.checked)} disabled={busy}/> Popular</label><label><input type="checkbox" checked={form.isActive} onChange={(event) => updateForm('isActive', event.target.checked)} disabled={busy}/> Active</label></div>{editing && <section className={styles.imagePanel} aria-labelledby="photo-title"><h4 id="photo-title">Item photo</h4>{editing.imageUrl && <p className={styles.currentImage}>Current image saved.</p>}{preview && <img className={styles.preview} src={preview} alt="Selected replacement preview"/>}<label>Choose JPG, PNG, or WebP image (5 MB max)<input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={(event) => chooseFile(event.target.files?.[0] || null)}/></label><button type="button" className={styles.secondary} disabled={busy || !file} onClick={uploadImage}>{busy ? 'Uploading…' : 'Upload and save photo'}</button></section>}<div className={styles.formActions}><button disabled={busy}>{busy ? 'Saving…' : editing ? 'Save changes' : 'Add item'}</button>{editing && <button type="button" className={styles.secondary} disabled={busy} onClick={resetForm}>Cancel</button>}</div></form>
+        <form className={styles.form} onSubmit={save}><div><p className={styles.eyebrow}>Menu item</p><h3>{editing ? 'Edit item' : 'Add item'}</h3></div><label>Category<select value={form.categoryId} onChange={(event) => updateForm('categoryId', event.target.value)} required disabled={busy}><option value="">Choose a category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label>Name<input value={form.name} onChange={(event) => updateForm('name', event.target.value)} required disabled={busy}/></label><label>Description<textarea value={form.description} onChange={(event) => updateForm('description', event.target.value)} disabled={busy}/></label><label>Price<input type="number" min="0" step="0.01" value={form.price} onChange={(event) => updateForm('price', event.target.value)} required disabled={busy}/></label><div className={styles.checks}><label><input type="checkbox" checked={form.isPopular} onChange={(event) => updateForm('isPopular', event.target.checked)} disabled={busy}/> Popular</label><label><input type="checkbox" checked={form.isActive} onChange={(event) => updateForm('isActive', event.target.checked)} disabled={busy}/> Active</label></div><section className={styles.imagePanel} aria-labelledby="photo-title"><h4 id="photo-title">Item photo</h4>{editing?.imageUrl && <p className={styles.currentImage}>Current image saved.</p>}{!editing && <p className={styles.currentImage}>Optional: the selected photo is uploaded when the item is added.</p>}{preview && <img className={styles.preview} src={preview} alt="Selected replacement preview"/>}<label>Choose JPG, PNG, or WebP image (5 MB max)<input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={(event) => chooseFile(event.target.files?.[0] || null)}/></label>{editing && <button type="button" className={styles.secondary} disabled={busy || !file} onClick={uploadImage}>{busy ? 'Uploading…' : 'Upload and save photo'}</button>}</section><div className={styles.formActions}><button disabled={busy}>{busy ? (file && !editing ? 'Uploading photo…' : 'Saving…') : editing ? 'Save changes' : 'Add item'}</button>{editing && <button type="button" className={styles.secondary} disabled={busy} onClick={resetForm}>Cancel</button>}</div></form>
         <section className={styles.listPanel} aria-labelledby="item-list-title"><div className={styles.listHeading}><div><p className={styles.eyebrow}>Current menu</p><h3 id="item-list-title">Items</h3></div>{!canReorder && <p className={styles.reorderNote}>Select one category and clear search to reorder.</p>}</div>{items.length === 0 ? <p className={styles.empty}>No menu items match these filters.</p> : <div className={styles.tableWrap}><table><thead><tr><th>Name</th><th>Category</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead><tbody>{items.map((item, index) => {
           const moveUpDisabled = busy || !canReorder || index === 0;
           const moveDownDisabled = busy || !canReorder || index === items.length - 1;
