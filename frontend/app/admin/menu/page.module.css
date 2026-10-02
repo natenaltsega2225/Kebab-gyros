@@ -56,6 +56,17 @@
 .rowActions button { min-height: 30px; padding: 4px 8px; font-size: 12px; }
 .rowActions .delete { border-color: #a6473b; background: #a6473b; }
 .rowActions .delete:hover { border-color: #87382f; background: #87382f; }
+.actionsTrigger { min-width: 36px; min-height: 34px; padding: 4px 8px; border: 1px solid #8ca3a4; border-radius: 6px; background: #fff; color: #263b40; font: inherit; font-size: 16px; font-weight: 700; letter-spacing: 1px; line-height: 1; cursor: pointer; }
+.actionsTrigger:hover { border-color: #087fa3; background: #eef7f9; }
+.actionsTrigger:focus-visible, .actionsMenu button:focus-visible { outline: 3px solid #bde1e9; outline-offset: 2px; }
+.actionsTrigger:disabled { opacity: .55; cursor: not-allowed; }
+.actionsMenu { position: fixed; z-index: 20; display: grid; width: 196px; padding: 6px; border: 1px solid #b9c7c5; border-radius: 8px; background: #fff; box-shadow: 0 8px 20px #17384026; }
+.actionsMenu button { min-height: 36px; padding: 8px 10px; border: 0; border-radius: 5px; background: transparent; color: #263b40; font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.actionsMenu button:hover:not(:disabled) { background: #eef7f9; color: #08627d; }
+.actionsMenu button:disabled { color: #718184; cursor: not-allowed; }
+.actionsMenu .delete { margin-top: 5px; border-top: 1px solid #e0e8e7; border-radius: 0 0 5px 5px; color: #9b392f; }
+.actionsMenu .delete:hover { background: #fff0ed; color: #87382f; }
+.menuHint { margin: 4px 4px 2px; color: #63777b; font-size: 12px; line-height: 1.35; }
 .error, .success, .empty { margin: 0 0 16px; padding: 11px 13px; border-radius: 6px; font-size: 14px; }
 .error { background: #fff0ed; color: #8d2b1f; }
 .success { background: #edf4e6; color: #39512b; }
@@ -76,5 +87,5 @@
   .reorderNote { text-align: left; }
   .formActions button { flex: 1; }
   .tableWrap { margin: 0 -4px; }
-  .rowActions { min-width: 190px; }
+  .actionsMenu { max-width: calc(100vw - 16px); }
 }

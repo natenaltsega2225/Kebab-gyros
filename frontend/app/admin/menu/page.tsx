@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- Local blob URLs cannot use Next image optimization. */
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, MouseEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminShell from '../../../components/admin/AdminShell';
 import styles from './page.module.css';
@@ -10,6 +10,7 @@ type Category = { id: number; name: string };
 type AdminUser = { username: string; role: string; mustChangePassword: boolean };
 type Item = { id: number; categoryId: number; categoryName: string; name: string; description: string | null; price: number | string; imageUrl: string | null; isPopular: boolean | 0 | 1; isActive: boolean | 0 | 1 };
 type FormValues = { categoryId: string; name: string; description: string; price: string; isPopular: boolean; isActive: boolean };
+type OpenActions = { itemId: number; top: number; left: number };
 
 const emptyForm: FormValues = { categoryId: '', name: '', description: '', price: '', isPopular: false, isActive: true };
 const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
@@ -30,8 +31,40 @@ export default function MenuPage() {
   const [success, setSuccess] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
+  const [openActions, setOpenActions] = useState<OpenActions | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
+  const actionTriggerRefs = useRef(new Map<number, HTMLButtonElement>());
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+
+  useEffect(() => {
+    if (!openActions) return;
+    const activeActions = openActions;
+
+    function closeForOutsideClick(event: PointerEvent) {
+      const target = event.target as Node;
+      const trigger = actionTriggerRefs.current.get(activeActions.itemId);
+      if (!actionMenuRef.current?.contains(target) && !trigger?.contains(target)) setOpenActions(null);
+    }
+    function closeForEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setOpenActions(null);
+      actionTriggerRefs.current.get(activeActions.itemId)?.focus();
+    }
+    function closeForViewportChange() { setOpenActions(null); }
+
+    document.addEventListener('pointerdown', closeForOutsideClick);
+    document.addEventListener('keydown', closeForEscape);
+    document.addEventListener('scroll', closeForViewportChange, true);
+    window.addEventListener('resize', closeForViewportChange);
+    return () => {
+      document.removeEventListener('pointerdown', closeForOutsideClick);
+      document.removeEventListener('keydown', closeForEscape);
+      document.removeEventListener('scroll', closeForViewportChange, true);
+      window.removeEventListener('resize', closeForViewportChange);
+    };
+  }, [openActions]);
 
   async function load() {
     const params = new URLSearchParams();
@@ -144,6 +177,16 @@ export default function MenuPage() {
     setForm({ categoryId: String(item.categoryId), name: item.name, description: item.description || '', price: String(item.price), isPopular: toBoolean(item.isPopular), isActive: toBoolean(item.isActive) });
   }
 
+  function toggleActions(itemId: number, event: MouseEvent<HTMLButtonElement>) {
+    if (openActions?.itemId === itemId) { setOpenActions(null); return; }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 196;
+    const menuHeight = 176;
+    const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8));
+    const top = window.innerHeight - rect.bottom >= menuHeight + 8 ? rect.bottom + 6 : Math.max(8, rect.top - menuHeight - 6);
+    setOpenActions({ itemId, top, left });
+  }
+
   const canReorder = !query.trim() && Boolean(categoryFilter);
   if (loading) return <main className={styles.page}><p role="status">Loading menu items…</p></main>;
   if (!currentUser) return <main className={styles.page}><p className={styles.error} role="alert">The admin session is unavailable.</p></main>;
@@ -156,7 +199,29 @@ export default function MenuPage() {
       <section className={styles.toolbar} aria-label="Menu filters"><label>Search menu items<input placeholder="Search by name" value={query} onChange={(event) => setQuery(event.target.value)} disabled={busy}/></label><label>Category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} disabled={busy}><option value="">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><button disabled={busy} onClick={() => { setBusy(true); load().catch((reason) => setError(reason.message)).finally(() => setBusy(false)); }}>Search</button></section>
       <div className={styles.columns}>
         <form className={styles.form} onSubmit={save}><div><p className={styles.eyebrow}>Menu item</p><h3>{editing ? 'Edit item' : 'Add item'}</h3></div><label>Category<select value={form.categoryId} onChange={(event) => updateForm('categoryId', event.target.value)} required disabled={busy}><option value="">Choose a category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label>Name<input value={form.name} onChange={(event) => updateForm('name', event.target.value)} required disabled={busy}/></label><label>Description<textarea value={form.description} onChange={(event) => updateForm('description', event.target.value)} disabled={busy}/></label><label>Price<input type="number" min="0" step="0.01" value={form.price} onChange={(event) => updateForm('price', event.target.value)} required disabled={busy}/></label><div className={styles.checks}><label><input type="checkbox" checked={form.isPopular} onChange={(event) => updateForm('isPopular', event.target.checked)} disabled={busy}/> Popular</label><label><input type="checkbox" checked={form.isActive} onChange={(event) => updateForm('isActive', event.target.checked)} disabled={busy}/> Active</label></div>{editing && <section className={styles.imagePanel} aria-labelledby="photo-title"><h4 id="photo-title">Item photo</h4>{editing.imageUrl && <p className={styles.currentImage}>Current image saved.</p>}{preview && <img className={styles.preview} src={preview} alt="Selected replacement preview"/>}<label>Choose JPG, PNG, or WebP image (5 MB max)<input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={(event) => chooseFile(event.target.files?.[0] || null)}/></label><button type="button" className={styles.secondary} disabled={busy || !file} onClick={uploadImage}>{busy ? 'Uploading…' : 'Upload and save photo'}</button></section>}<div className={styles.formActions}><button disabled={busy}>{busy ? 'Saving…' : editing ? 'Save changes' : 'Add item'}</button>{editing && <button type="button" className={styles.secondary} disabled={busy} onClick={resetForm}>Cancel</button>}</div></form>
-        <section className={styles.listPanel} aria-labelledby="item-list-title"><div className={styles.listHeading}><div><p className={styles.eyebrow}>Current menu</p><h3 id="item-list-title">Items</h3></div>{!canReorder && <p className={styles.reorderNote}>Select one category and clear search to reorder.</p>}</div>{items.length === 0 ? <p className={styles.empty}>No menu items match these filters.</p> : <div className={styles.tableWrap}><table><thead><tr><th>Name</th><th>Category</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead><tbody>{items.map((item, index) => <tr key={item.id}><td><strong>{item.name}</strong>{item.description && <span className={styles.description}>{item.description}</span>}</td><td><span className={styles.badge}>{item.categoryName}</span></td><td>${Number(item.price).toFixed(2)}</td><td><span className={`${styles.status} ${toBoolean(item.isActive) ? styles.active : styles.inactive}`}>{toBoolean(item.isActive) ? 'Active' : 'Inactive'}</span>{toBoolean(item.isPopular) && <span className={styles.popular}>Popular</span>}</td><td><div className={styles.rowActions}><button disabled={busy || !canReorder || index === 0} onClick={() => move(index, -1)} aria-label={`Move ${item.name} up`}>Up</button><button disabled={busy || !canReorder || index === items.length - 1} onClick={() => move(index, 1)} aria-label={`Move ${item.name} down`}>Down</button><button disabled={busy} onClick={() => beginEdit(item)}>Edit</button><button disabled={busy} className={styles.delete} onClick={() => removeItem(item)}>Delete</button></div></td></tr>)}</tbody></table></div>}</section>
+        <section className={styles.listPanel} aria-labelledby="item-list-title"><div className={styles.listHeading}><div><p className={styles.eyebrow}>Current menu</p><h3 id="item-list-title">Items</h3></div>{!canReorder && <p className={styles.reorderNote}>Select one category and clear search to reorder.</p>}</div>{items.length === 0 ? <p className={styles.empty}>No menu items match these filters.</p> : <div className={styles.tableWrap}><table><thead><tr><th>Name</th><th>Category</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead><tbody>{items.map((item, index) => {
+          const moveUpDisabled = busy || !canReorder || index === 0;
+          const moveDownDisabled = busy || !canReorder || index === items.length - 1;
+          const isActionsOpen = openActions?.itemId === item.id;
+          const orderingHint = !canReorder ? 'Select one category and clear search to reorder.' : '';
+          return <tr key={item.id}><td><strong>{item.name}</strong>{item.description && <span className={styles.description}>{item.description}</span>}</td><td><span className={styles.badge}>{item.categoryName}</span></td><td>${Number(item.price).toFixed(2)}</td><td><span className={`${styles.status} ${toBoolean(item.isActive) ? styles.active : styles.inactive}`}>{toBoolean(item.isActive) ? 'Active' : 'Inactive'}</span>{toBoolean(item.isPopular) && <span className={styles.popular}>Popular</span>}</td><td><button
+            ref={(element) => { if (element) actionTriggerRefs.current.set(item.id, element); else actionTriggerRefs.current.delete(item.id); }}
+            type="button"
+            className={styles.actionsTrigger}
+            aria-label={`Actions for ${item.name}`}
+            aria-haspopup="true"
+            aria-expanded={isActionsOpen}
+            aria-controls={`item-actions-${item.id}`}
+            disabled={busy}
+            onClick={(event) => toggleActions(item.id, event)}
+          >•••</button>{isActionsOpen && <div ref={actionMenuRef} id={`item-actions-${item.id}`} className={styles.actionsMenu} style={{ top: openActions.top, left: openActions.left }} aria-label={`Actions for ${item.name}`}>
+            <button type="button" onClick={() => { setOpenActions(null); beginEdit(item); }}>Edit</button>
+            <button type="button" disabled={moveUpDisabled} title={orderingHint || (index === 0 ? 'This is already the first item.' : undefined)} onClick={() => { setOpenActions(null); void move(index, -1); }}>Move up</button>
+            <button type="button" disabled={moveDownDisabled} title={orderingHint || (index === items.length - 1 ? 'This is already the last item.' : undefined)} onClick={() => { setOpenActions(null); void move(index, 1); }}>Move down</button>
+            {!canReorder && <p className={styles.menuHint}>{orderingHint}</p>}
+            <button type="button" className={styles.delete} onClick={() => { setOpenActions(null); void removeItem(item); }}>Delete</button>
+          </div>}</td></tr>;
+        })}</tbody></table></div>}</section>
       </div>
     </section>
   </AdminShell>;
